@@ -1,0 +1,195 @@
+version: '3.7'
+
+services:
+  fastapi:
+    image: fastapi
+    container_name: fastapi
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    command:
+      - bash
+      - -c
+      - |
+        while !</dev/tcp/postgres/5432; do sleep 1; done; alembic upgrade head
+        mkdir /home/app/logs
+        uvicorn main:app --host 0.0.0.0 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./app:/home/app"
+    env_file: .env
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - meetups_services
+    restart: on-failure
+
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: 'rabbitmq'
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ".data/rabbitmq:/var/lib/rabbitmq/"
+    networks:
+      - meetups_services
+    restart: on-failure
+
+
+  redis:
+    image: redis:5.0.6-alpine
+    volumes:
+      - ".data/redis:/data"
+    ports:
+      - "6379:6379"
+    container_name: redis
+    networks:
+      - meetups_services
+    restart: on-failure
+
+
+  pgsync:
+    container_name: pgsync
+    build:
+      context: .
+      dockerfile: docker/pgsync/Dockerfile
+    env_file: .env
+    command:
+      - bash
+      - -c
+      - |
+        while !</dev/tcp/elasticsearch/9200; do sleep 1; done; \
+        bootstrap
+        pgsync --daemon > /dev/null
+    depends_on:
+      - redis
+      - postgres
+      - elasticsearch
+    networks:
+      - meetups_services
+    restart: on-failure
+
+
+  celery:
+    image: fastapi
+    container_name: celery
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - "./app:/home/app"
+    env_file: .env
+    depends_on:
+      - fastapi
+      - rabbitmq
+    command:
+      - bash
+      - -c
+      - |
+        while !</dev/tcp/rabbitmq/5672; do sleep 1; done; \
+        celery -A main.celery flower --port=8001 &
+        celery -A main.celery worker -P gevent -c 10 --loglevel=Info
+    networks:
+      - meetups_services
+    restart: on-failure
+
+
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    volumes:
+      - ".data/postgres:/var/lib/postgresql/data"
+    env_file: .env
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+    ports:
+      - "5432:5432"
+    networks:
+      - meetups_services
+
+
+  elasticsearch:
+    container_name: elastic
+    build:
+      context: docker/elasticsearch/
+      dockerfile: Dockerfile
+      args:
+        ELK_VERSION: ${ELK_VERSION:-7.10.1}
+    volumes:
+      - type: bind
+        source: ./configs/elasticsearch/elasticsearch.yml
+        target: /usr/share/elasticsearch/config/elasticsearch.yml
+        read_only: true
+      - "elastic_data:/usr/share/elasticsearch/data"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - node.name=elasticsearch
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - meetups_services
+
+
+  kibana:
+    container_name: kibana
+    build:
+      context: docker/kibana/
+      dockerfile: Dockerfile
+      args:
+        ELK_VERSION: ${ELK_VERSION:-7.10.1}
+    volumes:
+      - type: bind
+        source: ./configs/kibana/kibana.yml
+        target: /usr/share/kibana/config/kibana.yml
+        read_only: true
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - meetups_services
+
+
+  datadog:
+    container_name: datadog
+    build:
+      context: .
+      dockerfile: docker/datadog/Dockerfile
+    links:
+     - fastapi
+     - redis
+    env_file: .env
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "fastapi", "service": "python-meetups"}]'
+    volumes:
+      - type: bind
+        source: ./app/logs/
+        target: /tmp/
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+    networks:
+      - meetups_services
+
+volumes:
+  elastic_data:
+
+
+networks:
+  meetups_services:
+    name: meetups_services
+    driver: bridge

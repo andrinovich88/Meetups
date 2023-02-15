@@ -1,0 +1,130 @@
+[
+    {
+        "database": "fastapi",
+        "index": "meetups",
+        "nodes": {
+            "table": "meetups",
+            "columns": [
+                "id",
+                "meetup_name",
+                "theme_id",
+                "place_id",
+                "description",
+                "date"
+            ],
+            "transform": {
+                "mapping": {
+                    "places.location": {
+                        "type": "geo_point"
+                    }
+                }
+            },
+            "children": [
+                {
+                    "table": "places",
+                    "columns": [
+                        "id",
+                        "place_name",
+                        "location"
+                    ],
+                    "relationship": {
+                        "variant": "object",
+                        "type": "one_to_one",
+                        "foreign_key": {
+                            "child": [
+                                "id"
+                            ],
+                            "parent": [
+                                "place_id"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "table": "themes",
+                    "columns": [
+                        "id",
+                        "theme",
+                        "tags"
+                    ],
+                     "relationship": {
+                        "variant": "object",
+                        "type": "one_to_one",
+                        "foreign_key": {
+                            "child": [
+                                "id"
+                            ],
+                            "parent": [
+                                "theme_id"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    {
+        "database": "fastapi",
+        "index": "users",
+        "nodes": {
+            "table": "users",
+            "columns": [
+                "id",
+                "email",
+                "username",
+                "password_hash",
+                "confirmed",
+                "first_name",
+                "last_name",
+                "is_active",
+                "avatar_url",
+                "is_super"
+            ],
+            "children": [
+                {
+                    "table": "meetups_users",
+                    "columns": [
+                        "id",
+                        "user_id",
+                        "meetup_id"
+                    ],
+                     "relationship": {
+                        "variant": "object",
+                        "type": "one_to_many",
+                        "foreign_key": {
+                            "child": [
+                                "user_id"
+                            ],
+                            "parent": [
+                                "id"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "table": "tokens",
+                    "columns": [
+                        "id",
+                        "token",
+                        "expires",
+                        "user_id"
+                    ],
+                    "relationship": {
+                        "variant": "object",
+                        "type": "one_to_many",
+                        "foreign_key": {
+                            "child": [
+                                "user_id"
+                            ],
+                            "parent": [
+                                "id"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+]
+
+

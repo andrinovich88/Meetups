@@ -1,0 +1,23 @@
+name: Launching tests
+
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+
+jobs:
+  test-meetups-services:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v2
+
+      - name: Build docker images
+        run: docker-compose --file docker-compose.test.yml up -d --build
+
+      - name: Run tests
+        run: docker exec fastapi pytest

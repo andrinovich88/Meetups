@@ -1,0 +1,7 @@
+flake8==6.0.0
+mccabe==0.7.0
+pycodestyle==2.10.0
+pyflakes==3.0.1
+isort==5.10.1
+asgi-testclient==0.3.1
+SQLAlchemy-Utils==0.39.0

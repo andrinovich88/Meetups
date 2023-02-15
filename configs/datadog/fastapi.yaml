@@ -1,0 +1,7 @@
+logs:
+
+  - type: file
+    path: "/tmp/python-meetups.log"
+    service: "python-meetups"
+    source: fastapi
+    sourcecategory: sourcecode
